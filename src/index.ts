@@ -31,10 +31,32 @@ app.post('/api/receipts', async (req, res) => {
     };
 
     if (supabase) {
-        const { error } = await supabase
-            .from('receipts')
-            .insert({ id, receipt_text: receiptText, receipt_data });
-        if (error) {
+        try {
+            const { error } = await supabase
+                .from('receipts')
+                .insert({ id, receipt_text: receiptText, receipt_data });
+            if (error) {
+                console.error(
+                    JSON.stringify({
+                        message: 'Supabase insert failed',
+                        errorMessage: error.message,
+                        errorCode: (error as any).code,
+                        errorDetails: (error as any).details,
+                        errorHint: (error as any).hint,
+                    }),
+                );
+                return res.status(500).json({ error: 'Failed to store receipt' });
+            }
+        } catch (error: any) {
+            console.error(
+                JSON.stringify({
+                    message: 'Supabase insert failed',
+                    errorMessage: error?.message ?? String(error),
+                    errorCode: error?.code,
+                    errorDetails: error?.details,
+                    errorHint: error?.hint,
+                }),
+            );
             return res.status(500).json({ error: 'Failed to store receipt' });
         }
     } else {
