@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import path from 'node:path';
 
 export const app = express();
+app.set('trust proxy', 1);
 const port = Number(process.env.PORT) || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${port}`;
 
@@ -65,8 +66,8 @@ app.post('/api/receipts', async (req, res) => {
 
     return res.status(201).json({
         id,
-        url: `${BASE_URL}/r/${id}`,
-        qrPayload: `${BASE_URL}/r/${id}`,
+        url: `${req.protocol}://${req.get('host')}/r/${id}`,
+        qrPayload: `${req.protocol}://${req.get('host')}/r/${id}`,
     });
 });
 

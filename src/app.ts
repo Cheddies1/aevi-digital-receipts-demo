@@ -23,6 +23,7 @@ function formatDate(dateString: string | undefined): string | undefined {
 
 export function createApp(repo: ReceiptRepository) {
     const app = express();
+    app.set('trust proxy', 1);
 
     app.use(express.json());
 
@@ -70,7 +71,7 @@ export function createApp(repo: ReceiptRepository) {
         if (receiptData !== undefined) insertInput.receiptData = receiptData;
 
         const { id } = await repo.insertReceipt(insertInput);
-        const baseUrl = process.env.BASE_URL ?? req.headers.origin;
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
         const qrPayload = `${baseUrl}/r/${id}`;
         return res.status(201).json({ id, url: qrPayload, qrPayload });
     });
