@@ -1,0 +1,160 @@
+import express from 'express';
+import { ReceiptRepository } from './repositories/ReceiptRepository';
+import { nanoid } from 'nanoid';
+import type { ReceiptContext, ReceiptData } from './repositories/ReceiptRepository';
+
+// import or move all support functions like formatDate, summaryFields, etc.
+function formatDate(dateString: string | undefined): string | undefined {
+    if (!dateString) return undefined;
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+        const options: Intl.DateTimeFormatOptions = {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+        } satisfies Intl.DateTimeFormatOptions;
+        return new Intl.DateTimeFormat('en-US', options).format(date);
+    }
+    return dateString; // Return raw if parsing fails
+}
+
+export function createApp(repo: ReceiptRepository) {
+    const app = express();
+
+    app.use(express.json());
+
+    const asRecord = (value: unknown): Record<string, unknown> | undefined => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+        return value as Record<string, unknown>;
+    };
+
+    const asString = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
+
+    app.get('/health', (req, res) => {
+        res.json({ ok: true });
+    });
+
+    app.post('/api/receipts', async (req, res) => {
+        const body = (req.body ?? {}) as Record<string, unknown>;
+
+        let receiptType: string | undefined = asString(body.receiptType);
+        let receiptText: unknown = body.receiptText;
+        let receiptData: ReceiptData | undefined = asRecord(body.receiptData) as ReceiptData | undefined;
+
+        const receipt = asRecord(body.receipt);
+        const payload = asRecord(body.payload);
+        const context = asRecord(body.context) as ReceiptContext | undefined;
+
+        if (receipt) {
+            receiptType = asString(receipt.type) ?? receiptType;
+            receiptText = receipt.text;
+            const receiptDataFromReceipt = (asRecord(receipt.data) ?? {}) as ReceiptData;
+            receiptData = { ...(receiptDataFromReceipt ?? {}), ...(context ? { context } : {}) };
+        } else if (payload) {
+            receiptType = asString(payload.receiptType) ?? receiptType;
+            receiptText = payload.receiptText;
+            receiptData = (asRecord(payload.receiptData) ?? {}) as ReceiptData;
+        }
+
+        if (typeof receiptText !== 'string' || receiptText.trim() === '') {
+            return res.status(400).json({ error: 'receiptText is required and cannot be empty.' });
+        }
+
+        const insertInput: { receiptText: string; receiptType?: string; receiptData?: ReceiptData } = {
+            receiptText,
+        };
+        if (receiptType !== undefined) insertInput.receiptType = receiptType;
+        if (receiptData !== undefined) insertInput.receiptData = receiptData;
+
+        const { id } = await repo.insertReceipt(insertInput);
+        const baseUrl = process.env.BASE_URL ?? req.headers.origin;
+        const qrPayload = `${baseUrl}/r/${id}`;
+        return res.status(201).json({ id, url: qrPayload, qrPayload });
+    });
+
+    app.get('/r/:id', async (req, res) => {
+        const { id } = req.params;
+        const receipt = await repo.getReceiptById(id);
+        if (!receipt) {
+            return res.status(404).send('Receipt not found');
+        }
+        const { receipt_text, receipt_data } = receipt;
+        const { context } = receipt_data || {};
+        const summaryFields = [
+            { label: 'Amount', value: `${receipt_data?.amount || ''} ${receipt_data?.currency || ''}` },
+            { label: 'Card brand', value: receipt_data?.cardBrand },
+            { label: 'Truncated PAN', value: receipt_data?.truncatedPAN },
+            { label: 'Auth code', value: receipt_data?.authorizationCode },
+            { label: 'Response', value: receipt_data?.responseMessage || receipt_data?.responseCode },
+            { label: 'Transaction type', value: receipt_data?.transactionType },
+            { label: 'Transaction time', value: formatDate(receipt_data?.transactionDateTime) || context?.timestamp },
+            { label: 'Terminal ID', value: receipt_data?.terminalId || context?.terminalId },
+            { label: 'Merchant ID', value: receipt_data?.merchantId || context?.merchantId },
+            { label: 'Transaction ID', value: receipt_data?.transactionId || context?.transactionId },
+        ];
+        const summaryHtml = `
+            <table style="width: 100%; border-collapse: collapse; border-spacing: 0; margin: 0; padding: 0;">
+                ${summaryFields.filter(f => f.value).map(f => `
+                    <tr>
+                        <td style="text-align: left; width: 200px; padding: 0;">${f.label}:</td>
+                        <td style="text-align: right; padding: 0;">${f.value}</td>
+                    </tr>
+                `).join('')}
+            </table>
+        `;
+        res.send(`
+            <div style='background-color: #f6f6f6; padding: 20px; text-align: center;'>
+                <h1>Aevi Digital Receipt</h1>
+                <h4>Demo - not a production receipt</h4>
+                <div style='margin-bottom: 20px;'>
+                    <button id='download-pdf' onclick='downloadReceiptPdf();'>Download this receipt as PDF</button>
+                </div>
+                <div id='receipt-container' style='background-color: white; width: 340px; margin: 0 auto; padding: 20px; border-radius: 5px; font-family: monospace;'>
+                    <pre style="text-align: center; margin: 0 0 12px 0;">${receipt_text}</pre>
+                    <div class="summary">${summaryHtml}</div>
+                </div>
+            </div>
+            <script src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'></script>
+            <script src='https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js'></script>
+            <script>
+                async function downloadReceiptPdf() {
+                    try {
+                        const container = document.getElementById('receipt-container');
+                        if (!container) throw new Error('Missing #receipt-container');
+                        const btn = document.getElementById('download-pdf');
+                        if (btn) btn.disabled = true;
+                        const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff' });
+                        const imgData = canvas.toDataURL('image/png');
+                        const jsPDF = window.jspdf && window.jspdf.jsPDF;
+                        if (!jsPDF) throw new Error('jsPDF not available');
+                        const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+                        const pageWidth = pdf.internal.pageSize.getWidth();
+                        const pageHeight = pdf.internal.pageSize.getHeight();
+                        const margin = 36;
+                        const maxWidth = pageWidth - margin * 2;
+                        const maxHeight = pageHeight - margin * 2;
+                        const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
+                        const renderWidth = canvas.width * ratio;
+                        const renderHeight = canvas.height * ratio;
+                        pdf.addImage(imgData, 'PNG', margin, margin, renderWidth, renderHeight, undefined, 'FAST');
+                        pdf.save('receipt.pdf');
+                        if (btn) btn.disabled = false;
+                    } catch (e) {
+                        try { window.print(); } catch {}
+                    }
+                }
+            </script>
+            <style>
+                @media print {
+                    .summary, pre { page-break-inside: avoid; }
+                    button { display: none; }
+                }
+            </style>
+        `);
+    });
+
+    return app;
+}
