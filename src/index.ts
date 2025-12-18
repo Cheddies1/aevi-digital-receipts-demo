@@ -6,8 +6,8 @@ import { nanoid } from 'nanoid';
 import path from 'node:path';
 
 export const app = express();
-const PORT = process.env.PORT || 3000;
-const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+const port = Number(process.env.PORT) || 3000;
+const BASE_URL = process.env.BASE_URL || `http://localhost:${port}`;
 
 const inMemoryReceipts = new Map<string, { receipt_text: string; receipt_data: any }>();
 
@@ -142,8 +142,8 @@ app.get('/r/:id', async (req, res) => {
 });
 
 export function startServer() {
-    return app.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT}`);
+    return app.listen(port, () => {
+        console.log(`Server listening on port ${port}`);
     });
 }
 
