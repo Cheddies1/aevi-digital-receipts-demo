@@ -228,7 +228,7 @@ app.get('/r/:id', async (req, res) => {
           width: 100% !important;
           max-width: 340px;
           box-sizing: border-box;
-          padding: 16px !important;
+          padding: 10px !important;
         }
         #receipt-container pre {
           white-space: pre-wrap;

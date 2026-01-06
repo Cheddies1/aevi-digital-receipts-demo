@@ -124,6 +124,10 @@ export function createApp(repo: ReceiptRepository) {
       }
 
       html, body { height: 100%; }
+      html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
       body {
         margin: 0;
         background: var(--aevi-hero-green);
@@ -200,8 +204,12 @@ export function createApp(repo: ReceiptRepository) {
 
       #receipt-container pre {
         margin: 0 0 12px 0;
+        font-size: 13px;
+        line-height: 1.25;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
         white-space: pre;
-        text-align: center;
+        text-align: left;
       }
 
       .summary {
@@ -219,16 +227,18 @@ export function createApp(repo: ReceiptRepository) {
       .summary-value { text-align: right; padding: 2px 0; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
 
       @media screen and (max-width: 600px) {
-        #page-container { padding: 16px !important; }
+        #page-container { padding: 12px !important; }
+        #content { max-width: 100% !important; }
         #receipt-container {
           width: 100% !important;
-          max-width: 340px;
+          max-width: 100% !important;
           box-sizing: border-box;
-          padding: 16px !important;
+          padding: 12px !important;
         }
         #receipt-container pre {
-          white-space: pre-wrap;
-          overflow-wrap: anywhere;
+          font-size: clamp(10px, 2.8vw, 13px);
+          white-space: pre;
+          overflow-x: auto;
         }
         .summary table { width: 100%; }
         .summary td { overflow-wrap: anywhere; word-break: break-word; }
