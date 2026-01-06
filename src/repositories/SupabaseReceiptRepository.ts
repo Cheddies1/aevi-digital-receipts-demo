@@ -8,7 +8,7 @@ export class SupabaseReceiptRepository implements ReceiptRepository {
     private readonly client: SupabaseClient | null;
 
     constructor(client?: SupabaseClient | null) {
-        this.client = client ?? getSupabase();
+        this.client = client !== undefined ? client : getSupabase();
     }
 
     async insertReceipt(input: {
@@ -24,12 +24,13 @@ export class SupabaseReceiptRepository implements ReceiptRepository {
         };
         if (input.receiptType !== undefined) row.receipt_type = input.receiptType;
 
-        if (!this.client) {
+        const client = this.client;
+        if (!client) {
             this.inMemory.set(id, row);
             return { id };
         }
 
-        const { error } = await this.client
+        const { error } = await client
             .from('receipts')
             .insert({ id: row.id, receipt_text: row.receipt_text, receipt_data: row.receipt_data });
 
@@ -38,9 +39,10 @@ export class SupabaseReceiptRepository implements ReceiptRepository {
     }
 
     async getReceiptById(id: string): Promise<ReceiptRow | null> {
-        if (!this.client) return this.inMemory.get(id) ?? null;
+        const client = this.client;
+        if (!client) return this.inMemory.get(id) ?? null;
 
-        const { data, error } = await this.client
+        const { data, error } = await client
             .from('receipts')
             .select('id, receipt_text, receipt_data')
             .eq('id', id)

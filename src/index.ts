@@ -13,6 +13,7 @@ const BASE_URL = process.env.BASE_URL || `http://localhost:${port}`;
 const inMemoryReceipts = new Map<string, { receipt_text: string; receipt_data: any }>();
 
 app.use(express.json());
+app.use('/assets', express.static(path.join(process.cwd(), 'public')));
 
 app.post('/api/receipts', async (req, res) => {
     const body = req.body ?? {};
@@ -98,15 +99,14 @@ app.get('/r/:id', async (req, res) => {
         { label: 'Transaction ID', value: receipt_data.transactionId || context?.transactionId },
     ];
 
-    // Format summary section HTML as a table
     const summaryHtml = `
-        <table style='width: 100%; border-collapse: collapse; border-spacing: 0; margin: 0; padding: 0;'>
+        <table class="summary-table">
             ${summaryFields
-        .filter(field => field.value) // Only include fields with a value
+        .filter(field => field.value)
                 .map(field => `
                     <tr>
-                        <td style='padding: 2px 0;'><strong>${field.label}:</strong></td>
-                        <td style='padding: 2px 0; text-align: right;'>${field.value}</td>
+                        <td class="summary-label"><strong>${field.label}:</strong></td>
+                        <td class="summary-value">${field.value}</td>
                     </tr>
                 `).join('')}
         </table>
@@ -118,9 +118,112 @@ app.get('/r/:id', async (req, res) => {
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
+      :root {
+        --aevi-hero-green: #33CC6B;
+        --aevi-off-white: #F7F6EF;
+        --aevi-text: #0b1b12;
+        --aevi-text-muted: rgba(11, 27, 18, 0.75);
+        --aevi-font-sans: "Basis Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+        --aevi-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      }
+
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        background: var(--aevi-hero-green);
+        color: var(--aevi-text);
+        font-family: var(--aevi-font-sans);
+      }
+
+      #page-container {
+        min-height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 28px;
+        box-sizing: border-box;
+      }
+
+      #content {
+        width: 100%;
+        max-width: 420px;
+        text-align: center;
+      }
+
+      #brand {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 6px;
+        line-height: 0;
+      }
+      #brand img { display: block; height: 72px; width: auto; max-width: min(260px, 90vw); margin: 0; }
+
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        color: white;
+        font-weight: 650;
+      }
+
+      #subtitle {
+        margin: 10px 0 18px 0;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 14px;
+      }
+
+      #actions {
+        margin: 0 0 18px 0;
+      }
+
+      #download-pdf {
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        background: rgba(255, 255, 255, 0.12);
+        color: white;
+        padding: 10px 14px;
+        border-radius: 999px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      #download-pdf:disabled { opacity: 0.55; cursor: not-allowed; }
+      #download-pdf:hover:not(:disabled) { background: rgba(255, 255, 255, 0.18); }
+
+      #receipt-container {
+        background: var(--aevi-off-white);
+        width: 340px;
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 18px;
+        border-radius: 14px;
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+        text-align: left;
+        box-sizing: border-box;
+        font-family: var(--aevi-font-mono);
+      }
+
+      #receipt-container pre {
+        margin: 0 0 12px 0;
+        white-space: pre;
+        text-align: center;
+      }
+
+      .summary {
+        color: var(--aevi-text-muted);
+        font-size: 13px;
+      }
+      .summary-table {
+        width: 100%;
+        border-collapse: collapse;
+        border-spacing: 0;
+        margin: 0;
+        padding: 0;
+      }
+      .summary-label { text-align: left; padding: 2px 0; vertical-align: top; }
+      .summary-value { text-align: right; padding: 2px 0; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
+
       @media screen and (max-width: 600px) {
-        body { margin: 0; }
-        #page-container { padding: 12px !important; }
+        #page-container { padding: 16px !important; }
         #receipt-container {
           width: 100% !important;
           max-width: 340px;
@@ -131,8 +234,8 @@ app.get('/r/:id', async (req, res) => {
           white-space: pre-wrap;
           overflow-wrap: anywhere;
         }
-        #receipt-container table { width: 100%; }
-        #receipt-container td { overflow-wrap: anywhere; word-break: break-word; }
+        .summary table { width: 100%; }
+        .summary td { overflow-wrap: anywhere; word-break: break-word; }
       }
       @media print {
           .summary, pre { page-break-inside: avoid; }
@@ -141,16 +244,19 @@ app.get('/r/:id', async (req, res) => {
     </style>
   </head>
   <body>
-    <div id='page-container' style='background-color: #f6f6f6; padding: 20px; text-align: center;'>
-            <h1>Aevi Digital Receipt</h1>
-            <h4>Demo - not a production receipt</h4>
-            <div style='margin-bottom: 20px;'>
-                <button id='download-pdf' onclick='downloadReceiptPdf();'>Download this receipt as PDF</button>
-            </div>
-        <div id='receipt-container' style='background-color: white; width: 340px; margin: 0 auto; padding: 20px; border-radius: 5px; font-family: monospace;'>
-            <pre style='margin: 0 0 12px 0;'>${receipt_text}</pre>
-            <div class='summary'>${summaryHtml}</div>
+    <div id="page-container">
+      <div id="content">
+        <div id="brand"><img src="/assets/aevi-logo.svg" alt="Aevi logo"></div>
+        <h1>Digital Receipt</h1>
+        <div id="subtitle">Demo – not a production receipt</div>
+        <div id="actions">
+          <button id="download-pdf" onclick="downloadReceiptPdf();">Download this receipt as PDF</button>
         </div>
+        <div id="receipt-container">
+          <pre>${receipt_text}</pre>
+          <div class="summary">${summaryHtml}</div>
+        </div>
+      </div>
     </div>
     <script src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'></script>
     <script src='https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js'></script>
@@ -161,7 +267,7 @@ app.get('/r/:id', async (req, res) => {
           if (!container) throw new Error('Missing #receipt-container');
           const btn = document.getElementById('download-pdf');
           if (btn) btn.disabled = true;
-          const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff' });
+          const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#F7F6EF' });
           const imgData = canvas.toDataURL('image/png');
           const jsPDF = window.jspdf && window.jspdf.jsPDF;
           if (!jsPDF) throw new Error('jsPDF not available');
