@@ -223,7 +223,7 @@ app.get('/r/:id', async (req, res) => {
       .summary-value { text-align: right; padding: 2px 0; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
 
       @media screen and (max-width: 600px) {
-        #page-container { padding: 16px !important; }
+        #page-container { padding: 0px !important; }
         #receipt-container {
           width: 100% !important;
           max-width: 340px;
